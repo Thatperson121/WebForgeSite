@@ -54,6 +54,11 @@ function App() {
     setEditMode(false);
 
     try {
+      if (!import.meta.env.VITE_OPENAI_API_KEY || 
+          import.meta.env.VITE_OPENAI_API_KEY === 'your_openai_api_key_here') {
+        throw new Error('Please set your OpenAI API key in the environment variables');
+      }
+
       // Remove filler words and clean up the text
       const cleanedText = projectDescription
         .split(' ')
@@ -86,6 +91,9 @@ function App() {
 
       if (!response.ok) {
         const errorData = await response.json();
+        if (response.status === 401) {
+          throw new Error('Invalid API key. Please check your OpenAI API key in the environment variables.');
+        }
         throw new Error(errorData.error?.message || 'Failed to generate enhanced description');
       }
 
@@ -94,7 +102,7 @@ function App() {
       setAiResponse(enhancedDescription);
     } catch (error) {
       console.error('Error generating enhanced description:', error);
-      alert('Failed to generate enhanced description. Please try again.');
+      alert(error instanceof Error ? error.message : 'Failed to generate enhanced description. Please try again.');
     } finally {
       setIsLoading(false);
     }
