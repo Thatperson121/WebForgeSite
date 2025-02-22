@@ -55,6 +55,8 @@ function App() {
 
     try {
       const apiKey = import.meta.env.VITE_OPENAI_API_KEY;
+      console.log('API Key configured:', !!apiKey);
+      
       if (!apiKey) {
         throw new Error('OpenAI API key not configured');
       }
@@ -65,6 +67,8 @@ function App() {
         .map(word => ['like', 'um', 'uh', 'well'].includes(word.toLowerCase()) ? '' : word)
         .filter(Boolean)
         .join(' ');
+
+      console.log('Making API request with cleaned text:', cleanedText);
 
       const response = await fetch('https://api.openai.com/v1/chat/completions', {
         method: 'POST',
@@ -91,15 +95,22 @@ function App() {
 
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(errorData.error?.message || 'Failed to generate enhanced description');
+        console.error('OpenAI API Error:', errorData);
+        throw new Error(errorData.error?.message || `API request failed with status ${response.status}`);
       }
 
       const data = await response.json();
+      console.log('API Response:', data);
+      
+      if (!data.choices?.[0]?.message?.content) {
+        throw new Error('Unexpected API response format');
+      }
+
       const enhancedDescription = data.choices[0].message.content.trim();
       setAiResponse(enhancedDescription);
     } catch (error) {
-      console.error('Error generating enhanced description:', error);
-      alert('Failed to generate enhanced description. Please try again.');
+      console.error('Detailed error:', error);
+      alert(error instanceof Error ? error.message : 'Failed to generate enhanced description. Please try again.');
     } finally {
       setIsLoading(false);
     }
@@ -517,7 +528,7 @@ const projects = [
   {
     title: "Restaurant Website",
     description: "Modern restaurant website with online ordering system and table reservations.",
-    image: "https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?ixlib=rb-1.2.1&auto=format&fit=crop&w=1000&q=80",
+    image: "https://images.unsplash.com/photo-1517248135467-4c7edcad3438?ixlib=rb-1.2.1&auto=format&fit=crop&w=1000&q=80",
     link: "https://example.com/restaurant-site"
   },
   {
