@@ -2,19 +2,28 @@
   command = "npm run build"
   publish = "dist"
   node_version = "18"
+  base = "/"
 
 [build.environment]
   NODE_VERSION = "18"
   NPM_VERSION = "9"
+  NETLIFY_USE_YARN = "false"
+  CI = "true"
 
 [context.production]
   command = "npm run build"
+  publish = "dist"
+  base = "/"
 
 [context.deploy-preview]
   command = "npm run build"
+  publish = "dist"
+  base = "/"
 
 [context.branch-deploy]
   command = "npm run build"
+  publish = "dist"
+  base = "/"
 
 [[redirects]]
   from = "/*"
