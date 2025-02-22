@@ -1,14 +1,19 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Github, Linkedin, Mail, ChevronDown, ExternalLink, Hammer, ChevronUp, X, Send, Loader, MessageSquare, Edit3 } from 'lucide-react';
+import { Github, Linkedin, Mail, ChevronDown, ExternalLink, Hammer, ChevronUp, X, Send, Loader, MessageSquare, Edit3, Mic, MicOff, Phone } from 'lucide-react';
 
 function App() {
   const projectsRef = useRef<HTMLDivElement>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const [showBackToTop, setShowBackToTop] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [projectDescription, setProjectDescription] = useState('');
   const [aiResponse, setAiResponse] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [editMode, setEditMode] = useState(false);
+  const [isRecording, setIsRecording] = useState(false);
+  const [audioChunks, setAudioChunks] = useState<Blob[]>([]);
+  const [transcriptionLoading, setTranscriptionLoading] = useState(false);
+  const [selectedVersion, setSelectedVersion] = useState('original');
 
   const scrollToTop = () => {
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -47,26 +52,135 @@ function App() {
   const handleSubmitProject = async () => {
     setIsLoading(true);
     setEditMode(false);
-    // Simulate AI response - In a real app, this would be an API call
-    setTimeout(() => {
-      setAiResponse(`Based on my analysis of your project request, here's what I understand:
 
-Project Overview:
-${projectDescription}
+    try {
+      // Remove filler words and clean up the text
+      const cleanedText = projectDescription
+        .split(' ')
+        .map(word => ['like', 'um', 'uh', 'well'].includes(word.toLowerCase()) ? '' : word)
+        .filter(Boolean)
+        .join(' ');
 
-Key Points:
-• The project scope appears to be [scope estimation]
-• Main features requested: [extracted from description]
-• Potential technical requirements: [based on features]
+      const response = await fetch('/.netlify/functions/enhance-description', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          description: cleanedText
+        }),
+      });
 
-Would you like to:
-1. Proceed with this understanding
-2. Refine your request
-3. Add more details
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to generate enhanced description');
+      }
 
-Feel free to edit your description if you'd like to provide more clarity or adjust the scope.`);
+      const data = await response.json();
+      setAiResponse(data.enhancedDescription);
+    } catch (error) {
+      console.error('Error generating enhanced description:', error);
+      alert('Failed to generate enhanced description. Please try again.');
+    } finally {
       setIsLoading(false);
-    }, 1500);
+    }
+  };
+
+  const startRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      
+      // Check supported MIME types
+      const mimeType = [
+        'audio/webm',
+        'audio/webm;codecs=opus',
+        'audio/mp4',
+        'audio/mpeg',
+        'audio/ogg;codecs=opus'
+      ].find(type => MediaRecorder.isTypeSupported(type));
+
+      if (!mimeType) {
+        throw new Error('No supported audio MIME types found');
+      }
+
+      console.log('Using MIME type:', mimeType);
+      
+      const mediaRecorder = new MediaRecorder(stream, {
+        mimeType: mimeType
+      });
+      mediaRecorderRef.current = mediaRecorder;
+      
+      const chunks: Blob[] = [];
+      
+      mediaRecorder.ondataavailable = (event: BlobEvent) => {
+        if (event.data.size > 0) {
+          chunks.push(event.data);
+        }
+      };
+
+      mediaRecorder.onstop = async () => {
+        const audioBlob = new Blob(chunks, { type: mimeType });
+        console.log('Audio blob size:', audioBlob.size, 'bytes');
+        console.log('Audio blob type:', audioBlob.type);
+        await transcribeAudio(audioBlob);
+      };
+
+      mediaRecorder.start(1000); // Record in 1-second chunks
+      setIsRecording(true);
+    } catch (error) {
+      console.error('Error accessing microphone:', error);
+      alert('Error accessing microphone: ' + (error instanceof Error ? error.message : 'Unknown error'));
+    }
+  };
+
+  const stopRecording = () => {
+    if (mediaRecorderRef.current && isRecording) {
+      mediaRecorderRef.current.stop();
+      mediaRecorderRef.current.stream.getTracks().forEach((track: MediaStreamTrack) => track.stop());
+      setIsRecording(false);
+    }
+  };
+
+  const transcribeAudio = async (audioBlob: Blob) => {
+    setTranscriptionLoading(true);
+    try {
+      // Convert Blob to base64
+      const reader = new FileReader();
+      const base64Promise = new Promise<string>((resolve) => {
+        reader.onloadend = () => {
+          const base64Data = reader.result as string;
+          const base64Content = base64Data.split(',')[1];
+          resolve(base64Content);
+        };
+      });
+      reader.readAsDataURL(audioBlob);
+      
+      const base64Audio = await base64Promise;
+
+      const response = await fetch('/.netlify/functions/transcribe-audio', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          audioData: base64Audio,
+          mimeType: audioBlob.type
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Transcription failed');
+      }
+
+      const data = await response.json();
+      setProjectDescription((prev: string) => prev + ' ' + data.text.trim());
+    } catch (error) {
+      console.error('Error transcribing audio:', error);
+      alert(error instanceof Error ? error.message : 'Error transcribing audio. Please try again.');
+    } finally {
+      setTranscriptionLoading(false);
+    }
   };
 
   return (
@@ -84,17 +198,6 @@ Feel free to edit your description if you'd like to provide more clarity or adju
           <p className="text-xl sm:text-2xl text-gray-600 mb-12 leading-relaxed">
             Crafting beautiful digital experiences through clean code and thoughtful design
           </p>
-          <div className="flex justify-center gap-6 mb-16">
-            <a href="#" className="text-gray-600 hover:text-gray-900 transition-colors">
-              <Github className="w-6 h-6" />
-            </a>
-            <a href="#" className="text-gray-600 hover:text-gray-900 transition-colors">
-              <Linkedin className="w-6 h-6" />
-            </a>
-            <a href="#" className="text-gray-600 hover:text-gray-900 transition-colors">
-              <Mail className="w-6 h-6" />
-            </a>
-          </div>
           <button
             onClick={() => setIsModalOpen(true)}
             className="bg-gray-900 text-white px-8 py-3 rounded-full hover:bg-gray-800 transition-colors"
@@ -118,7 +221,7 @@ Feel free to edit your description if you'd like to provide more clarity or adju
       >
         <div className="max-w-7xl mx-auto">
           <h2 className="text-3xl font-bold text-gray-900 mb-12 text-center fade-element">
-            Selected Works
+            Previous Projects
           </h2>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
             {projects.map((project, index) => (
@@ -139,6 +242,8 @@ Feel free to edit your description if you'd like to provide more clarity or adju
                     <p className="text-gray-200 mb-4">{project.description}</p>
                     <a
                       href={project.link}
+                      target="_blank"
+                      rel="noopener noreferrer"
                       className="inline-flex items-center text-white border border-white px-4 py-2 rounded-full hover:bg-white hover:text-gray-900 transition-colors"
                     >
                       View Project
@@ -153,31 +258,38 @@ Feel free to edit your description if you'd like to provide more clarity or adju
       </section>
 
       {/* Contact Section */}
-      <section className="py-20 px-4 sm:px-6 lg:px-8">
+      <section className="py-20 px-4 sm:px-6 lg:px-8 bg-white">
         <div className="max-w-3xl mx-auto text-center fade-element">
-          <h2 className="text-3xl font-bold text-gray-900 mb-6">Let's Connect</h2>
-          <p className="text-xl text-gray-600 mb-8">
-            Have a project in mind? Let's forge something amazing together.
-          </p>
-          <a
-            href="mailto:hello@webforge.dev"
-            className="inline-block bg-gray-900 text-white px-8 py-3 rounded-full hover:bg-gray-800 transition-colors"
+          <h2 className="text-3xl font-bold text-gray-900 mb-6">Contact Information</h2>
+          <div className="space-y-6 mb-8">
+            <div>
+              <p className="text-xl text-gray-600 mb-2">
+                <Mail className="inline-block w-6 h-6 mr-2 mb-1" />
+                <a href="mailto:thewebforge121@gmail.com" className="hover:text-gray-900 transition-colors">
+                  thewebforge121@gmail.com
+                </a>
+              </p>
+              <p className="text-gray-600">Email is the best way to reach me - I'll respond as soon as possible!</p>
+            </div>
+            <div>
+              <p className="text-xl text-gray-600 mb-2">
+                <Phone className="inline-block w-6 h-6 mr-2 mb-1" />
+                <a href="sms:+13857898033" className="hover:text-gray-900 transition-colors">
+                  (385) 789-8033
+                </a>
+              </p>
+              <p className="text-gray-600">Note: Text messages only - I am unable to take calls. For the quickest response, please use email.</p>
+            </div>
+          </div>
+          <button
+            onClick={scrollToTop}
+            className="bg-gray-900 text-white px-8 py-3 rounded-full hover:bg-gray-800 transition-colors inline-flex items-center"
           >
-            Get in Touch
-          </a>
+            <ChevronUp className="w-5 h-5 mr-2" />
+            Back to Top
+          </button>
         </div>
       </section>
-
-      {/* Back to Top Button */}
-      {showBackToTop && (
-        <button
-          onClick={scrollToTop}
-          className="fixed bottom-8 right-8 bg-gray-900 text-white p-3 rounded-full shadow-lg hover:bg-gray-800 transition-colors"
-          aria-label="Back to top"
-        >
-          <ChevronUp className="w-6 h-6" />
-        </button>
-      )}
 
       {/* Request App Modal */}
       {isModalOpen && (
@@ -210,15 +322,55 @@ Feel free to edit your description if you'd like to provide more clarity or adju
               <label htmlFor="project-description" className="block text-sm font-medium text-gray-700 mb-2">
                 Describe your project idea
               </label>
-              <textarea
-                id="project-description"
-                rows={6}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-900 focus:border-transparent"
-                placeholder="Tell us about your app idea, features you'd like, and any specific requirements..."
-                value={projectDescription}
-                onChange={(e) => setProjectDescription(e.target.value)}
-                disabled={!editMode && aiResponse}
-              ></textarea>
+              <div className="relative">
+                <textarea
+                  id="project-description"
+                  rows={6}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-900 focus:border-transparent"
+                  placeholder="Tell us about your app idea, features you'd like, and any specific requirements..."
+                  value={projectDescription}
+                  onChange={(e) => setProjectDescription(e.target.value)}
+                  disabled={Boolean(!editMode && aiResponse)}
+                ></textarea>
+                <div className="absolute bottom-4 right-4 flex gap-2">
+                  {transcriptionLoading ? (
+                    <div className="p-2 text-gray-500">
+                      <Loader className="w-5 h-5 animate-spin" />
+                    </div>
+                  ) : (
+                    <button
+                      onClick={isRecording ? stopRecording : startRecording}
+                      className={`p-2 rounded-full transition-colors ${
+                        isRecording 
+                          ? 'bg-red-500 hover:bg-red-600 text-white' 
+                          : 'bg-gray-100 hover:bg-gray-200 text-gray-700'
+                      }`}
+                      title={isRecording ? 'Stop recording' : 'Start recording'}
+                    >
+                      {isRecording ? (
+                        <MicOff className="w-5 h-5" />
+                      ) : (
+                        <Mic className="w-5 h-5" />
+                      )}
+                    </button>
+                  )}
+                  {editMode ? (
+                    <button
+                      onClick={handleSubmitProject}
+                      className="p-2 bg-gray-100 hover:bg-gray-200 rounded-full text-gray-700"
+                    >
+                      <Send className="w-5 h-5" />
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => setEditMode(true)}
+                      className="p-2 bg-gray-100 hover:bg-gray-200 rounded-full text-gray-700"
+                    >
+                      <Edit3 className="w-5 h-5" />
+                    </button>
+                  )}
+                </div>
+              </div>
             </div>
 
             {!aiResponse && (
@@ -244,7 +396,7 @@ Feel free to edit your description if you'd like to provide more clarity or adju
             {aiResponse && (
               <div className="mt-6">
                 <div className="flex items-center justify-between mb-2">
-                  <h4 className="text-lg font-semibold">AI Analysis</h4>
+                  <h4 className="text-lg font-semibold">Select Version to Send</h4>
                   {!editMode && (
                     <button
                       onClick={() => setEditMode(true)}
@@ -255,20 +407,51 @@ Feel free to edit your description if you'd like to provide more clarity or adju
                     </button>
                   )}
                 </div>
-                <div className="bg-gray-50 p-4 rounded-lg whitespace-pre-wrap mb-6">
-                  {aiResponse}
+                
+                <div className="space-y-4">
+                  <div className="border rounded-lg p-4">
+                    <div className="flex items-center mb-2">
+                      <input
+                        type="radio"
+                        id="original"
+                        name="version"
+                        className="mr-2"
+                        defaultChecked
+                        onChange={() => setSelectedVersion('original')}
+                      />
+                      <label htmlFor="original" className="font-medium">Original Request</label>
+                    </div>
+                    <div className="bg-gray-50 p-4 rounded-lg">
+                      {projectDescription}
+                    </div>
+                  </div>
+
+                  <div className="border rounded-lg p-4">
+                    <div className="flex items-center mb-2">
+                      <input
+                        type="radio"
+                        id="enhanced"
+                        name="version"
+                        className="mr-2"
+                        onChange={() => setSelectedVersion('enhanced')}
+                      />
+                      <label htmlFor="enhanced" className="font-medium">Enhanced Version</label>
+                    </div>
+                    <div className="bg-gray-50 p-4 rounded-lg">
+                      {aiResponse}
+                    </div>
+                  </div>
                 </div>
-                <div className="flex gap-4">
+
+                <div className="flex gap-4 mt-6">
                   {editMode ? (
-                    <>
-                      <button
-                        onClick={handleSubmitProject}
-                        className="flex-1 bg-gray-900 text-white py-3 rounded-lg hover:bg-gray-800 transition-colors flex items-center justify-center"
-                      >
-                        <MessageSquare className="w-5 h-5 mr-2" />
-                        Reanalyze Request
-                      </button>
-                    </>
+                    <button
+                      onClick={handleSubmitProject}
+                      className="flex-1 bg-gray-900 text-white py-3 rounded-lg hover:bg-gray-800 transition-colors flex items-center justify-center"
+                    >
+                      <MessageSquare className="w-5 h-5 mr-2" />
+                      Reanalyze Request
+                    </button>
                   ) : (
                     <>
                       <button
@@ -278,11 +461,15 @@ Feel free to edit your description if you'd like to provide more clarity or adju
                         Refine Request
                       </button>
                       <a
-                        href={`mailto:hello@webforge.dev?subject=Project Request&body=${encodeURIComponent(`Project Description:\n${projectDescription}\n\nAI Analysis:\n${aiResponse}`)}`}
+                        href={`https://mail.google.com/mail/?view=cm&fs=1&to=thewebforge121@gmail.com&su=${encodeURIComponent('New Project Request - WebForge')}&body=${encodeURIComponent(
+                          selectedVersion === 'original' ? projectDescription : aiResponse
+                        )}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
                         className="flex-1 bg-gray-900 text-white py-3 rounded-lg hover:bg-gray-800 transition-colors text-center flex items-center justify-center"
                       >
                         <Send className="w-5 h-5 mr-2" />
-                        Submit Request
+                        Submit via Gmail
                       </a>
                     </>
                   )}
@@ -298,28 +485,28 @@ Feel free to edit your description if you'd like to provide more clarity or adju
 
 const projects = [
   {
-    title: "E-commerce Platform",
-    description: "A modern shopping experience built with React and Node.js",
-    image: "https://images.unsplash.com/photo-1531403009284-440f080d1e12?ixlib=rb-1.2.1&auto=format&fit=crop&w=1000&q=80",
-    link: "#"
-  },
-  {
-    title: "Travel App",
-    description: "Mobile-first travel planning application",
-    image: "https://images.unsplash.com/photo-1488646953014-85cb44e25828?ixlib=rb-1.2.1&auto=format&fit=crop&w=1000&q=80",
-    link: "#"
-  },
-  {
-    title: "Finance Dashboard",
-    description: "Real-time analytics and reporting platform",
+    title: "E-commerce Dashboard",
+    description: "A comprehensive admin dashboard for managing online stores, featuring real-time analytics and inventory management.",
     image: "https://images.unsplash.com/photo-1460925895917-afdab827c52f?ixlib=rb-1.2.1&auto=format&fit=crop&w=1000&q=80",
-    link: "#"
+    link: "https://example.com/ecommerce-dashboard"
   },
   {
-    title: "Social Media App",
-    description: "Connect and share with your community",
-    image: "https://images.unsplash.com/photo-1522542550221-31fd19575a2d?ixlib=rb-1.2.1&auto=format&fit=crop&w=1000&q=80",
-    link: "#"
+    title: "Restaurant Website",
+    description: "Modern restaurant website with online ordering system and table reservations.",
+    image: "https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?ixlib=rb-1.2.1&auto=format&fit=crop&w=1000&q=80",
+    link: "https://example.com/restaurant-site"
+  },
+  {
+    title: "Fitness Tracking App",
+    description: "Mobile-first fitness application with workout planning and progress tracking.",
+    image: "https://images.unsplash.com/photo-1517836357463-d25dfeac3438?ixlib=rb-1.2.1&auto=format&fit=crop&w=1000&q=80",
+    link: "https://example.com/fitness-app"
+  },
+  {
+    title: "Real Estate Platform",
+    description: "Property listing and management platform with virtual tour capabilities.",
+    image: "https://images.unsplash.com/photo-1560518883-ce09059eeffa?ixlib=rb-1.2.1&auto=format&fit=crop&w=1000&q=80",
+    link: "https://example.com/real-estate"
   }
 ];
 
