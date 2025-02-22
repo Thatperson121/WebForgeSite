@@ -1,0 +1,54 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.fade-element {
+  opacity: 0;
+  transform: translateY(20px);
+}
+
+.fade-element.fade-in {
+  animation: fadeIn 0.6s ease-out forwards;
+}
+
+/* Smooth scrolling for the entire page */
+html {
+  scroll-behavior: smooth;
+}
+
+/* Better typography */
+body {
+  @apply antialiased text-gray-900;
+}
+
+/* Improved focus styles */
+:focus {
+  @apply outline-none ring-2 ring-gray-900 ring-offset-2;
+}
+
+/* Modal animations */
+@keyframes modalFadeIn {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.modal {
+  animation: modalFadeIn 0.2s ease-out forwards;
+}
