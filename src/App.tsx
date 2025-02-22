@@ -54,13 +54,6 @@ function App() {
     setEditMode(false);
 
     try {
-      const apiKey = import.meta.env.VITE_OPENAI_API_KEY;
-      console.log('API Key configured:', !!apiKey);
-      
-      if (!apiKey) {
-        throw new Error('OpenAI API key not configured');
-      }
-
       // Remove filler words and clean up the text
       const cleanedText = projectDescription
         .split(' ')
@@ -68,13 +61,11 @@ function App() {
         .filter(Boolean)
         .join(' ');
 
-      console.log('Making API request with cleaned text:', cleanedText);
-
       const response = await fetch('https://api.openai.com/v1/chat/completions', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${apiKey}`,
+          'Authorization': `Bearer ${import.meta.env.VITE_OPENAI_API_KEY}`,
         },
         body: JSON.stringify({
           model: "gpt-3.5-turbo",
@@ -95,22 +86,15 @@ function App() {
 
       if (!response.ok) {
         const errorData = await response.json();
-        console.error('OpenAI API Error:', errorData);
-        throw new Error(errorData.error?.message || `API request failed with status ${response.status}`);
+        throw new Error(errorData.error?.message || 'Failed to generate enhanced description');
       }
 
       const data = await response.json();
-      console.log('API Response:', data);
-      
-      if (!data.choices?.[0]?.message?.content) {
-        throw new Error('Unexpected API response format');
-      }
-
       const enhancedDescription = data.choices[0].message.content.trim();
       setAiResponse(enhancedDescription);
     } catch (error) {
-      console.error('Detailed error:', error);
-      alert(error instanceof Error ? error.message : 'Failed to generate enhanced description. Please try again.');
+      console.error('Error generating enhanced description:', error);
+      alert('Failed to generate enhanced description. Please try again.');
     } finally {
       setIsLoading(false);
     }
@@ -174,17 +158,13 @@ function App() {
   const transcribeAudio = async (audioBlob: Blob) => {
     setTranscriptionLoading(true);
     try {
-      const apiKey = import.meta.env.VITE_OPENAI_API_KEY;
-      if (!apiKey) {
-        throw new Error('OpenAI API key not configured');
-      }
-
       // Verify blob is valid
       if (audioBlob.size === 0) {
         throw new Error('No audio data recorded');
       }
 
       const formData = new FormData();
+      // Use the correct file extension based on the MIME type
       const fileExtension = audioBlob.type.includes('webm') ? 'webm' 
         : audioBlob.type.includes('mp4') ? 'm4a'
         : audioBlob.type.includes('mpeg') ? 'mp3'
@@ -194,10 +174,13 @@ function App() {
       formData.append('file', audioBlob, `recording.${fileExtension}`);
       formData.append('model', 'whisper-1');
 
+      console.log('Sending file with type:', audioBlob.type);
+      console.log('File extension:', fileExtension);
+
       const response = await fetch('https://api.openai.com/v1/audio/transcriptions', {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${apiKey}`,
+          'Authorization': `Bearer ${import.meta.env.VITE_OPENAI_API_KEY}`,
         },
         body: formData,
       });
@@ -365,7 +348,7 @@ function App() {
                   placeholder="Tell us about your app idea, features you'd like, and any specific requirements..."
                   value={projectDescription}
                   onChange={(e) => setProjectDescription(e.target.value)}
-                  disabled={!editMode && Boolean(aiResponse)}
+                  disabled={!editMode && aiResponse}
                 ></textarea>
                 <div className="absolute bottom-4 right-4 flex gap-2">
                   {transcriptionLoading ? (
@@ -528,7 +511,7 @@ const projects = [
   {
     title: "Restaurant Website",
     description: "Modern restaurant website with online ordering system and table reservations.",
-    image: "https://images.unsplash.com/photo-1517248135467-4c7edcad3438?ixlib=rb-1.2.1&auto=format&fit=crop&w=1000&q=80",
+    image: "https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?ixlib=rb-1.2.1&auto=format&fit=crop&w=1000&q=80",
     link: "https://example.com/restaurant-site"
   },
   {
