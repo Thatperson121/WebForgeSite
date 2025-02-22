@@ -54,6 +54,11 @@ function App() {
     setEditMode(false);
 
     try {
+      const apiKey = import.meta.env.VITE_OPENAI_API_KEY;
+      if (!apiKey) {
+        throw new Error('OpenAI API key not configured');
+      }
+
       // Remove filler words and clean up the text
       const cleanedText = projectDescription
         .split(' ')
@@ -61,23 +66,37 @@ function App() {
         .filter(Boolean)
         .join(' ');
 
-      const response = await fetch('/.netlify/functions/enhance-description', {
+      const response = await fetch('https://api.openai.com/v1/chat/completions', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Authorization': `Bearer ${apiKey}`,
         },
         body: JSON.stringify({
-          description: cleanedText
+          model: "gpt-3.5-turbo",
+          messages: [
+            {
+              role: "system",
+              content: "You are a professional project manager and technical writer. Your task is to take a project description and enhance it into a clear, professional, and comprehensive project specification. Focus on technical details, key features, and business value. Keep the tone professional and concise."
+            },
+            {
+              role: "user",
+              content: `Please enhance this project description into a professional project specification: ${cleanedText}`
+            }
+          ],
+          temperature: 0.7,
+          max_tokens: 500
         }),
       });
 
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to generate enhanced description');
+        throw new Error(errorData.error?.message || 'Failed to generate enhanced description');
       }
 
       const data = await response.json();
-      setAiResponse(data.enhancedDescription);
+      const enhancedDescription = data.choices[0].message.content.trim();
+      setAiResponse(enhancedDescription);
     } catch (error) {
       console.error('Error generating enhanced description:', error);
       alert('Failed to generate enhanced description. Please try again.');
@@ -144,33 +163,38 @@ function App() {
   const transcribeAudio = async (audioBlob: Blob) => {
     setTranscriptionLoading(true);
     try {
-      // Convert Blob to base64
-      const reader = new FileReader();
-      const base64Promise = new Promise<string>((resolve) => {
-        reader.onloadend = () => {
-          const base64Data = reader.result as string;
-          const base64Content = base64Data.split(',')[1];
-          resolve(base64Content);
-        };
-      });
-      reader.readAsDataURL(audioBlob);
-      
-      const base64Audio = await base64Promise;
+      const apiKey = import.meta.env.VITE_OPENAI_API_KEY;
+      if (!apiKey) {
+        throw new Error('OpenAI API key not configured');
+      }
 
-      const response = await fetch('/.netlify/functions/transcribe-audio', {
+      // Verify blob is valid
+      if (audioBlob.size === 0) {
+        throw new Error('No audio data recorded');
+      }
+
+      const formData = new FormData();
+      const fileExtension = audioBlob.type.includes('webm') ? 'webm' 
+        : audioBlob.type.includes('mp4') ? 'm4a'
+        : audioBlob.type.includes('mpeg') ? 'mp3'
+        : audioBlob.type.includes('ogg') ? 'ogg'
+        : 'webm';
+
+      formData.append('file', audioBlob, `recording.${fileExtension}`);
+      formData.append('model', 'whisper-1');
+
+      const response = await fetch('https://api.openai.com/v1/audio/transcriptions', {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${apiKey}`,
         },
-        body: JSON.stringify({
-          audioData: base64Audio,
-          mimeType: audioBlob.type
-        }),
+        body: formData,
       });
 
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Transcription failed');
+        const errorData = await response.json().catch(() => ({}));
+        console.error('Transcription error:', errorData);
+        throw new Error(errorData.error?.message || 'Transcription failed');
       }
 
       const data = await response.json();
@@ -330,7 +354,7 @@ function App() {
                   placeholder="Tell us about your app idea, features you'd like, and any specific requirements..."
                   value={projectDescription}
                   onChange={(e) => setProjectDescription(e.target.value)}
-                  disabled={Boolean(!editMode && aiResponse)}
+                  disabled={!editMode && Boolean(aiResponse)}
                 ></textarea>
                 <div className="absolute bottom-4 right-4 flex gap-2">
                   {transcriptionLoading ? (
