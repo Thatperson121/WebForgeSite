@@ -511,6 +511,12 @@ function App() {
 
 const projects = [
   {
+    title: "Testimony Composer",
+    description: "A streamlined web application for composing and organizing testimonies, featuring a clean interface and intuitive user experience.",
+    image: "https://images.unsplash.com/photo-1455390582262-044cdead277a?ixlib=rb-1.2.1&auto=format&fit=crop&w=1000&q=80",
+    link: "https://testimonycomposer.netlify.app/"
+  },
+  {
     title: "E-commerce Dashboard",
     description: "A comprehensive admin dashboard for managing online stores, featuring real-time analytics and inventory management.",
     image: "https://images.unsplash.com/photo-1460925895917-afdab827c52f?ixlib=rb-1.2.1&auto=format&fit=crop&w=1000&q=80",
@@ -527,12 +533,6 @@ const projects = [
     description: "Mobile-first fitness application with workout planning and progress tracking.",
     image: "https://images.unsplash.com/photo-1517836357463-d25dfeac3438?ixlib=rb-1.2.1&auto=format&fit=crop&w=1000&q=80",
     link: "https://example.com/fitness-app"
-  },
-  {
-    title: "Real Estate Platform",
-    description: "Property listing and management platform with virtual tour capabilities.",
-    image: "https://images.unsplash.com/photo-1560518883-ce09059eeffa?ixlib=rb-1.2.1&auto=format&fit=crop&w=1000&q=80",
-    link: "https://example.com/real-estate"
   }
 ];
 
